@@ -15,12 +15,6 @@ import { generateCalibrationPreviewPdf } from "@/lib/clientPdf";
 import type { FormFieldKey, TextFieldCoord } from "@/lib/formCoordinates";
 import { btnPrimary, btnSecondary, inputClass, labelClass } from "@/lib/ui";
 
-type CalibrationData = {
-  defaults: Record<FormFieldKey, TextFieldCoord>;
-  overrides: CalibrationOverrides;
-  coords: Record<FormFieldKey, TextFieldCoord>;
-};
-
 function fieldLabel(key: FormFieldKey): string {
   return key.replace(/_/g, " ");
 }
