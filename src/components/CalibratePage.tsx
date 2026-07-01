@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CALIBRATION_FIELD_GROUPS,
-  getCalibrationOverrides,
+  downloadCalibrationJson,
   getEffectiveFormCoords,
   overridesFromCoords,
+  preloadCalibration,
   resetCalibrationOverrides,
   saveCalibrationOverrides,
-  type CalibrationOverrides,
 } from "@/lib/clientCalibration";
 import { DEFAULT_FORM_COORDS } from "@/lib/formCoordinates";
 import { generateCalibrationPreviewPdf } from "@/lib/clientPdf";
@@ -41,8 +41,8 @@ export function CalibratePage() {
   const [resetFieldFlash, setResetFieldFlash] = useState(false);
 
   const load = useCallback(async () => {
+    await preloadCalibration();
     const defaults = DEFAULT_FORM_COORDS;
-    const overrides = getCalibrationOverrides();
     const merged = getEffectiveFormCoords();
     setDefaults(defaults);
     setCoords(merged);
@@ -109,6 +109,12 @@ export function CalibratePage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  function downloadForGithub() {
+    if (!coords) return;
+    const overrides = overridesFromCoords(coords);
+    downloadCalibrationJson(overrides);
+  }
+
   async function resetAll() {
     if (!confirm("Reset all field positions to built-in defaults?")) return;
     resetCalibrationOverrides();
@@ -147,8 +153,8 @@ export function CalibratePage() {
           <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">PDF Calibration</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             Preview shows <strong>bold sample text</strong> on the real form (same as a generated
-            PDF). The selected field is outlined in red with its name above. Use the grid to align
-            positions, then Save.
+            PDF). Save here for this browser. Use <strong>Download for GitHub</strong> to update
+            the live site for everyone.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
@@ -162,13 +168,26 @@ export function CalibratePage() {
           <button type="button" onClick={resetAll} className={`${btnSecondary} w-full sm:w-auto`}>
             Reset all
           </button>
+          <button
+            type="button"
+            onClick={downloadForGithub}
+            className={`${btnSecondary} w-full sm:w-auto`}
+          >
+            Download for GitHub
+          </button>
           <button type="button" onClick={save} className={`${btnPrimary} w-full sm:w-auto`} disabled={!dirty || saved}>
-            {saved ? "Saved ✓" : "Save calibration"}
+            {saved ? "Saved locally ✓" : "Save locally"}
           </button>
         </div>
       </div>
 
-      {saved && <p className="text-sm text-emerald-600">Calibration saved.</p>}
+      {saved && (
+        <p className="text-sm text-emerald-600">
+          Saved in this browser. Click <strong>Download for GitHub</strong>, replace{" "}
+          <code className="text-xs">public/pdf-calibration.json</code>, commit, and push to update
+          the live site.
+        </p>
+      )}
       {dirty && !saved && (
         <p className="text-sm text-amber-600">Unsaved changes — click Save calibration.</p>
       )}

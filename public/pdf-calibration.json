@@ -1,0 +1,182 @@
+{
+  "blo_contact": {
+    "y": 800,
+    "size": 12
+  },
+  "elector_name": {
+    "x": 10,
+    "y": 800,
+    "size": 12
+  },
+  "epic": {
+    "x": 10,
+    "y": 785,
+    "size": 12
+  },
+  "address": {
+    "x": 10,
+    "y": 770,
+    "size": 12
+  },
+  "serial_no": {
+    "x": 120,
+    "y": 800,
+    "size": 12
+  },
+  "part_no": {
+    "x": 120,
+    "y": 785,
+    "size": 12
+  },
+  "ac_pc_name": {
+    "x": 120,
+    "y": 770,
+    "size": 12
+  },
+  "state_2025": {
+    "x": 120,
+    "y": 756,
+    "size": 12
+  },
+  "dob_0": {
+    "size": 12
+  },
+  "dob_1": {
+    "size": 12
+  },
+  "dob_2": {
+    "size": 12
+  },
+  "dob_3": {
+    "size": 12
+  },
+  "dob_4": {
+    "size": 12
+  },
+  "dob_5": {
+    "size": 12
+  },
+  "dob_6": {
+    "size": 12
+  },
+  "dob_7": {
+    "size": 12
+  },
+  "aadhaar": {
+    "y": 615,
+    "size": 12
+  },
+  "mobile": {
+    "y": 595,
+    "size": 12
+  },
+  "father_name": {
+    "y": 574,
+    "size": 12
+  },
+  "father_epic": {
+    "y": 555,
+    "size": 12
+  },
+  "mother_name": {
+    "y": 536,
+    "size": 12
+  },
+  "mother_epic": {
+    "y": 516,
+    "size": 12
+  },
+  "spouse_name": {
+    "y": 497,
+    "size": 12
+  },
+  "spouse_epic": {
+    "y": 473,
+    "size": 12
+  },
+  "sir_elector_name": {
+    "x": 143,
+    "y": 412,
+    "size": 12
+  },
+  "sir_elector_epic": {
+    "x": 177,
+    "y": 391,
+    "size": 12
+  },
+  "sir_elector_relative": {
+    "x": 154,
+    "y": 374,
+    "size": 12
+  },
+  "sir_elector_relationship": {
+    "y": 357,
+    "size": 12
+  },
+  "sir_elector_district": {
+    "y": 340,
+    "size": 12
+  },
+  "sir_elector_state": {
+    "y": 321,
+    "size": 12
+  },
+  "sir_elector_ac": {
+    "y": 302,
+    "size": 12
+  },
+  "sir_relative_name": {
+    "y": 413,
+    "size": 12
+  },
+  "sir_relative_epic": {
+    "x": 390,
+    "y": 393,
+    "size": 12
+  },
+  "sir_relative_relative": {
+    "x": 366,
+    "y": 374,
+    "size": 12
+  },
+  "sir_relative_relationship": {
+    "y": 358,
+    "size": 12
+  },
+  "sir_relative_district": {
+    "y": 340,
+    "size": 12
+  },
+  "sir_relative_state": {
+    "y": 321,
+    "size": 12
+  },
+  "sir_relative_ac": {
+    "y": 302,
+    "size": 12
+  },
+  "sir_elector_ac_no": {
+    "x": 70,
+    "size": 12
+  },
+  "sir_elector_part_no": {
+    "x": 150,
+    "size": 12
+  },
+  "sir_elector_sr_no": {
+    "x": 225,
+    "size": 12
+  },
+  "sir_relative_ac_no": {
+    "x": 282,
+    "size": 12
+  },
+  "sir_relative_part_no": {
+    "x": 370,
+    "size": 12
+  },
+  "sir_relative_sr_no": {
+    "x": 455,
+    "size": 12
+  }
+}

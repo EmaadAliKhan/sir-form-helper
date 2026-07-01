@@ -11,6 +11,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { AuthSession } from "@/lib/authTypes";
+import { preloadCalibration } from "@/lib/clientCalibration";
 import {
   clearSession,
   getSession,
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setSession(getSession());
-    setLoading(false);
+    preloadCalibration().finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
