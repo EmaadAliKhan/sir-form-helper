@@ -4,23 +4,37 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000",
+    "dev:mobile": "concurrently -n next,tunnel -c blue,magenta \"next dev\" \"cloudflared tunnel --url http://localhost:3000\"",
+    "start:mobile": "concurrently -n next,tunnel -c blue,magenta \"next start\" \"cloudflared tunnel --url http://localhost:3000\"",
     "build": "next build",
+    "build:pages": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:import": "tsx scripts/import-csv.ts"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "next": "16.2.9",
+    "papaparse": "^5.5.4",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "pdfjs-dist": "^6.1.200",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }
