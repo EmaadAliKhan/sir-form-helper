@@ -7,6 +7,7 @@ import {
 export interface ParsedEciSirRecord {
   serialNo?: string;
   name: string;
+  epic: string;
   relative_name: string;
   relationship: string;
   age?: string;
@@ -25,6 +26,8 @@ export interface ParseEciSirPasteResult {
 }
 
 const RELATION_RE = /^(father|mother|husband|other|wife|son|daughter)$/i;
+/** Standard EPIC (ABC1234567) and variants e.g. AP412120156480 from SIR portal */
+const EPIC_RE = /^[A-Z]{2,3}\d{7,12}$/i;
 const HEADER_RE =
   /elector full name|relative full name|relative type|polling station|part serial|s\.\s*no/i;
 const REGIONAL_SCRIPT_RE =
@@ -81,6 +84,12 @@ function isSerialLine(line: string): boolean {
   return /^\d+$/.test(line.trim());
 }
 
+function extractEpic(value: string): string | null {
+  const trimmed = value.trim().toUpperCase();
+  if (EPIC_RE.test(trimmed)) return trimmed;
+  return null;
+}
+
 function isDataLine(line: string): boolean {
   const parts = line.split("\t").map((p) => p.trim());
   if (parts.length < 6) return false;
@@ -123,23 +132,35 @@ function buildRecord(
   elector: string,
   relative: string,
   dataParts: string[],
-  serialNo?: string
+  serialNo?: string,
+  epic = ""
 ): ParsedEciSirRecord | null {
   if (dataParts.length < 6) return null;
 
   const warnings: string[] = [];
-  const relationship = String(normalizeEciRelationship(dataParts[0] ?? ""));
-  const age = dataParts[1]?.trim() || undefined;
-  const state = dataParts[2]?.trim() ?? "";
-  const districtResult = translateEciDistrict(dataParts[3] ?? "");
+  let parts = [...dataParts];
+  let epicNo = epic;
+
+  if (!epicNo) {
+    const epicIdx = parts.findIndex((p) => extractEpic(p));
+    if (epicIdx >= 0) {
+      epicNo = extractEpic(parts[epicIdx]) ?? "";
+      parts = parts.filter((_, i) => i !== epicIdx);
+    }
+  }
+
+  const relationship = String(normalizeEciRelationship(parts[0] ?? ""));
+  const age = parts[1]?.trim() || undefined;
+  const state = parts[2]?.trim() ?? "";
+  const districtResult = translateEciDistrict(parts[3] ?? "");
   if (districtResult.warning) warnings.push(districtResult.warning);
   if (!districtResult.district) {
     warnings.push("District is required — fill it in the form before generating the PDF.");
   }
 
-  const ac = parseNumberName(dataParts[4] ?? "");
-  const ps = parseNumberName(dataParts[5] ?? "");
-  const sr_no = dataParts[6]?.trim() ?? "";
+  const ac = parseNumberName(parts[4] ?? "");
+  const ps = parseNumberName(parts[5] ?? "");
+  const sr_no = parts[6]?.trim() ?? "";
 
   if (!sr_no) warnings.push("Part Serial No. missing — Sr No left blank.");
   if (!elector) warnings.push("Elector name missing.");
@@ -151,6 +172,7 @@ function buildRecord(
   return {
     serialNo,
     name: elector.trim(),
+    epic: epicNo,
     relative_name: relative.trim(),
     relationship,
     age,
@@ -167,7 +189,16 @@ function buildRecord(
 function parseFullTabRow(line: string): ParsedEciSirRecord | null {
   const parts = line.split("\t").map((p) => p.trim());
   if (parts.length < 9) return null;
-  return buildRecord(parts[1], parts[2], parts.slice(3), parts[0]);
+
+  let epic = "";
+  let dataStart = 3;
+  const epicAt3 = extractEpic(parts[3] ?? "");
+  if (epicAt3) {
+    epic = epicAt3;
+    dataStart = 4;
+  }
+
+  return buildRecord(parts[1], parts[2], parts.slice(dataStart), parts[0], epic);
 }
 
 function parseChunk(lines: string[]): ParsedEciSirRecord | null {
@@ -190,12 +221,23 @@ function parseChunk(lines: string[]): ParsedEciSirRecord | null {
   const dataIdx = lines.findIndex((line, i) => i >= idx && isDataLine(line));
   if (dataIdx === -1) return null;
 
-  const nameLines = lines.slice(idx, dataIdx);
+  const preDataLines = lines.slice(idx, dataIdx);
+  let epic = "";
+  const nameLines: string[] = [];
+  for (const line of preDataLines) {
+    const found = extractEpic(line);
+    if (found && line.trim().toUpperCase() === found) {
+      epic = found;
+    } else {
+      nameLines.push(line);
+    }
+  }
+
   const elector = nameLines[0] ?? "";
   const relative = nameLines[1] ?? "";
   const dataParts = lines[dataIdx].split("\t").map((p) => p.trim());
 
-  return buildRecord(elector, relative, dataParts, serialNo);
+  return buildRecord(elector, relative, dataParts, serialNo, epic);
 }
 
 function splitRecordChunks(lines: string[]): string[][] {
@@ -266,7 +308,7 @@ export function parseEciSirPaste(input: string): ParseEciSirPasteResult {
 export function manualBlockFromParsed(record: ParsedEciSirRecord): Manual2002Block {
   return {
     name: record.name,
-    epic: "",
+    epic: record.epic,
     relative_name: record.relative_name,
     relationship: record.relationship,
     district: record.district,
@@ -281,6 +323,7 @@ export function manualBlockFromParsed(record: ParsedEciSirRecord): Manual2002Blo
 export function formatParsedRecordSummary(record: ParsedEciSirRecord): string {
   const parts = [
     record.name || "(no name)",
+    record.epic ? `EPIC ${record.epic}` : null,
     record.relative_name ? `rel: ${record.relative_name}` : null,
     record.relationship || null,
     record.ac_number && record.ac_name ? `AC ${record.ac_number} ${record.ac_name}` : null,

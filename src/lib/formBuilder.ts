@@ -346,15 +346,6 @@ function textWidth(text: string, font: PDFFont, size: number): number {
   return font.widthOfTextAtSize(text, size);
 }
 
-function truncate(text: string, maxWidth: number, font: PDFFont, size: number): string {
-  if (textWidth(text, font, size) <= maxWidth) return text;
-  let result = text;
-  while (result.length > 1 && textWidth(result + "\u2026", font, size) > maxWidth) {
-    result = result.slice(0, -1);
-  }
-  return result + "\u2026";
-}
-
 export function drawFormValues(
   page: Page,
   values: Partial<Record<FormFieldKey, string>>,
@@ -372,7 +363,7 @@ export function drawFormValues(
     const raw = values[key as FormFieldKey]?.trim();
     if (!raw) continue;
     const size = coord.size ?? 10;
-    const text = coord.maxWidth ? truncate(raw, coord.maxWidth, fontBold, size) : raw;
+    const text = raw;
 
     let x = coord.x;
     if (coord.boxWidth) {
