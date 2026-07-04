@@ -190,14 +190,25 @@ export async function downloadFormPdf(
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+function personNameForFilename(form: {
+  id: string;
+  voter_2025_name?: string;
+  payload: FormPayload;
+}): string {
+  const fromPayload = form.payload.elector_name?.trim().replace(/\s+/g, "-").replace(/[/\\?%*:|"<>]/g, "");
+  const fromRecord = form.voter_2025_name?.trim().replace(/\s+/g, "-").replace(/[/\\?%*:|"<>]/g, "");
+  return fromPayload || fromRecord || form.id;
+}
+
 export function formPdfFilename(form: {
   id: string;
   voter_2025_epic: string;
+  voter_2025_name?: string;
   payload: FormPayload;
 }): string {
-  const { payload, id, voter_2025_epic } = form;
-  if (payload.form_kind === "declaration") {
-    return `declaration-${payload.elector_name?.replace(/\s+/g, "-") || id}.pdf`;
+  const name = personNameForFilename(form);
+  if (form.payload.form_kind === "declaration") {
+    return `declaration-${name}.pdf`;
   }
-  return `enumeration-${voter_2025_epic || id}.pdf`;
+  return `enumeration-${name}.pdf`;
 }

@@ -84,7 +84,7 @@ function sirManualLabels(wasIn2002: boolean) {
       "Your relative's entry in the 2002 SIR list (right column on the printed form)",
     name: "Relative's name in 2002 SIR list",
     relativeName: "Their relative's name (as listed in 2002)",
-    relationship: "Your relationship to this person",
+    relationship: "How is this relative related to you?",
     partNo: "Relative's 2002 part / polling station no.",
     srNo: "Relative's 2002 serial no. in part",
   };
@@ -206,10 +206,13 @@ export function FormEditor({ formId }: { formId: string }) {
 
   async function applyEciSirPaste(block: Manual2002Block) {
     if (!payload) return;
+    const manualBlock = payload.was_in_2002
+      ? block
+      : { ...block, relationship: payload.manual_2002?.relationship ?? "" };
     const next = {
       ...payload,
       linked_2002_id: null,
-      manual_2002: block,
+      manual_2002: manualBlock,
     };
     setPayload(next);
     setManualMode(true);
@@ -426,12 +429,20 @@ export function FormEditor({ formId }: { formId: string }) {
             <Field label={sirLabels.name} value={payload.manual_2002.name} onChange={(v) => updateManual2002("name", v)} />
             <Field label="EPIC" optional value={payload.manual_2002.epic} onChange={(v) => updateManual2002("epic", v)} />
             <Field label={sirLabels.relativeName} value={payload.manual_2002.relative_name} onChange={(v) => updateManual2002("relative_name", v)} />
-            <SelectField
-              label={sirLabels.relationship}
-              value={payload.manual_2002.relationship}
-              options={[...ECI_RELATIONSHIP_OPTIONS]}
-              onChange={(v) => updateManual2002("relationship", v)}
-            />
+            {payload.was_in_2002 ? (
+              <SelectField
+                label={sirLabels.relationship}
+                value={payload.manual_2002.relationship}
+                options={[...ECI_RELATIONSHIP_OPTIONS]}
+                onChange={(v) => updateManual2002("relationship", v)}
+              />
+            ) : (
+              <Field
+                label={sirLabels.relationship}
+                value={payload.manual_2002.relationship}
+                onChange={(v) => updateManual2002("relationship", v)}
+              />
+            )}
             <SelectOrTypeField
               label="District"
               value={payload.manual_2002.district}
