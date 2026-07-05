@@ -363,7 +363,7 @@ export function drawFormValues(
     const raw = values[key as FormFieldKey]?.trim();
     if (!raw) continue;
     const size = coord.size ?? 10;
-    const text = raw;
+    const text = raw.toUpperCase();
 
     let x = coord.x;
     if (coord.boxWidth) {

@@ -27,8 +27,13 @@ function readAll(): FormRecord[] {
   }
 }
 
-function writeAll(forms: FormRecord[]): void {
-  localStorage.setItem(FORMS_KEY, JSON.stringify(forms));
+function writeAll(forms: FormRecord[]): boolean {
+  try {
+    localStorage.setItem(FORMS_KEY, JSON.stringify(forms));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function listForms(): FormRecord[] {
@@ -68,7 +73,9 @@ export function createForm(input: {
     created_at: now,
     updated_at: now,
   };
-  writeAll([form, ...readAll()]);
+  if (!writeAll([form, ...readAll()])) {
+    throw new Error("Could not save form — browser storage may be full. Delete old forms and try again.");
+  }
   return form;
 }
 
@@ -90,7 +97,7 @@ export function updateForm(
     updated_at: new Date().toISOString(),
   };
   forms[idx] = updated;
-  writeAll(forms);
+  if (!writeAll(forms)) return null;
   return updated;
 }
 
@@ -98,8 +105,7 @@ export function deleteForm(id: string): boolean {
   const forms = readAll();
   const next = forms.filter((f) => f.id !== id);
   if (next.length === forms.length) return false;
-  writeAll(next);
-  return true;
+  return writeAll(next);
 }
 
 export async function createDeclarationForm(): Promise<FormRecord> {

@@ -175,10 +175,11 @@ export async function downloadFormPdf(
   options?: { inline?: boolean }
 ): Promise<void> {
   const bytes = await generateFormPdf(payload);
-  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" });
+  const blob = new Blob([Uint8Array.from(bytes)], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   if (options?.inline) {
     window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return;
   }
   const anchor = document.createElement("a");
@@ -187,7 +188,7 @@ export async function downloadFormPdf(
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 function personNameForFilename(form: {

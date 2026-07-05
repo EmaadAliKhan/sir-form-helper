@@ -124,12 +124,14 @@ export function FormEditor({ formId }: { formId: string }) {
     setWhatsappNumber((prev) => (prev ? prev : localMobileDigits(payload.mobile)));
   }, [payload?.mobile]);
 
-  async function save(nextPayload?: FormPayload) {
+  async function save(nextPayload?: FormPayload, options?: { silent?: boolean }) {
     const toSave = nextPayload ?? payload;
     if (!toSave || !form) return false;
     setSaving(true);
-    setSaveFlash(false);
-    setSaveError("");
+    if (!options?.silent) {
+      setSaveFlash(false);
+      setSaveError("");
+    }
     const meta =
       toSave.form_kind === "declaration"
         ? {
@@ -143,12 +145,18 @@ export function FormEditor({ formId }: { formId: string }) {
       setForm(updated);
       setPayload(updated.payload);
       setSaving(false);
-      setSaveFlash(true);
-      setTimeout(() => setSaveFlash(false), 2500);
+      if (!options?.silent) {
+        setSaveFlash(true);
+        setTimeout(() => setSaveFlash(false), 2500);
+      }
       return true;
     }
     setSaving(false);
-    setSaveError("Could not save — try again.");
+    if (!options?.silent) {
+      setSaveError(
+        "Could not save — browser storage may be full. Delete old forms from the list and try again."
+      );
+    }
     return false;
   }
 
@@ -232,10 +240,13 @@ export function FormEditor({ formId }: { formId: string }) {
   async function downloadPdf() {
     if (!payload || !form) return;
     setPdfBusy("download");
+    setSaveError("");
     try {
-      await save();
-      const filename = formPdfFilename(form);
+      const filename = formPdfFilename({ ...form, payload });
       await downloadFormPdf(payload, filename);
+      void save(undefined, { silent: true });
+    } catch {
+      setSaveError("Could not download PDF — try again.");
     } finally {
       setPdfBusy(null);
     }
@@ -244,14 +255,22 @@ export function FormEditor({ formId }: { formId: string }) {
   async function printPdf() {
     if (!payload || !form) return;
     setPdfBusy("print");
+    setSaveError("");
     try {
-      await save();
       const bytes = await generateFormPdf(payload);
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const blob = new Blob([Uint8Array.from(bytes)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const win = window.open(url, "_blank");
-      win?.addEventListener("load", () => win.print());
+      if (!win) {
+        URL.revokeObjectURL(url);
+        setSaveError("Pop-up blocked — allow pop-ups for this site to print.");
+        return;
+      }
+      win.addEventListener("load", () => win.print());
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      void save(undefined, { silent: true });
+    } catch {
+      setSaveError("Could not generate PDF for printing — try again.");
     } finally {
       setPdfBusy(null);
     }
@@ -270,16 +289,19 @@ export function FormEditor({ formId }: { formId: string }) {
     openWhatsAppChat(phone, message);
 
     setWhatsappBusy(true);
+    setSaveError("");
     try {
-      await save();
       if (payload && form) {
-        await downloadFormPdf(payload, formPdfFilename(form));
+        await downloadFormPdf(payload, formPdfFilename({ ...form, payload }));
       }
+      void save(undefined, { silent: true });
 
       setToast(
         "PDF download started. In WhatsApp, tap attach (📎) and choose the PDF from Downloads or Files."
       );
       setTimeout(() => setToast(""), 8000);
+    } catch {
+      setSaveError("Could not download PDF — try again.");
     } finally {
       setWhatsappBusy(false);
     }
