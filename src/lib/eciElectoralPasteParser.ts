@@ -131,17 +131,25 @@ function cleanPasteLine(line: string): string {
   return trimmed;
 }
 
+function looksLikeFieldContinuation(text: string): boolean {
+  const t = text.trim();
+  if (!t || isViewDetails(t)) return false;
+  if (isAge(t) || isKnownState(t) || EPIC_RE.test(t) || /^\d+$/.test(t)) return false;
+  if (parseNumberName(t).number || isLikelyAddress(t)) return false;
+  return true;
+}
+
 function mergeTabFields(lines: string[]): string[] {
   const merged: string[] = [];
 
   for (const line of lines) {
-    const parts = line.split("\t").map((p) => p.trim());
+    const parts = line.split("\t").map((p) => p.trim()).filter(Boolean);
     if (merged.length === 0) {
       merged.push(...parts);
       continue;
     }
 
-    if (parts.length === 1 && merged.length > 0) {
+    if (parts.length === 1 && looksLikeFieldContinuation(parts[0])) {
       merged[merged.length - 1] = `${merged[merged.length - 1]} ${parts[0]}`.trim();
       continue;
     }
@@ -214,9 +222,10 @@ function buildRecord(parts: string[]): ParsedEciElectoralRecord | null {
     cursor++;
   }
 
-  const ac = numbered[0] ?? { number: "", name: "" };
-  const part = numbered[1] ?? { number: "", name: "" };
-  const booth = numbered[2] ?? { number: "", name: "" };
+  // ECI columns after State: District | Assembly Constituency | Part
+  const district = numbered[0] ?? { number: "", name: "" };
+  const ac = numbered[1] ?? { number: "", name: "" };
+  const part = numbered[2] ?? { number: "", name: "" };
 
   const rest = tail.slice(cursor).filter((p) => !isViewDetails(p));
   const addressParts: string[] = [];
@@ -241,7 +250,7 @@ function buildRecord(parts: string[]): ParsedEciElectoralRecord | null {
   if (!relative_name) warnings.push("Relative name missing.");
   if (!part_serial) warnings.push("Part serial number missing.");
   if (!ac.number) warnings.push("Assembly constituency number could not be parsed.");
-  if (!part.number) warnings.push("Part number could not be parsed.");
+  if (!part.number) warnings.push("Part / booth number could not be parsed.");
 
   return {
     serial_no: list_serial,
@@ -250,12 +259,12 @@ function buildRecord(parts: string[]): ParsedEciElectoralRecord | null {
     age,
     relative_name,
     state,
-    district_code: "",
-    district_name: "",
+    district_code: district.number,
+    district_name: district.name,
     ac_number: ac.number,
     ac_name: ac.name,
     part_no: part.number,
-    part_name: part.name || booth.name,
+    part_name: part.name,
     polling_station,
     part_serial,
     warnings,
@@ -368,6 +377,9 @@ export function formatEciElectoralSummary(record: ParsedEciElectoralRecord): str
     record.epic,
     record.name || "(no name)",
     record.relative_name ? `rel: ${record.relative_name}` : null,
+    record.district_code && record.district_name
+      ? `Dist ${record.district_code} ${record.district_name}`
+      : null,
     record.ac_number && record.ac_name ? `AC ${record.ac_number} ${record.ac_name}` : null,
     record.part_no ? `Part ${record.part_no}` : null,
     record.part_serial ? `Sr ${record.part_serial}` : "Sr —",

@@ -32,6 +32,13 @@ const HEADER_RE =
   /elector full name|relative full name|relative type|polling station|part serial|s\.\s*no/i;
 const REGIONAL_SCRIPT_RE =
   /[\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/;
+const KNOWN_STATES = new Set([
+  "telangana",
+  "andhra pradesh",
+  "karnataka",
+  "maharashtra",
+  "tamil nadu",
+]);
 
 const TELUGU_DISTRICT_MAP: Record<string, string> = {
   "హైదరాబాద్": "Hyderabad",
@@ -80,22 +87,21 @@ function isRelation(value: string): boolean {
   return RELATION_RE.test(value.trim());
 }
 
+function isSerialToken(value: string): boolean {
+  return /^\d+$/.test(value.trim());
+}
+
 function isSerialLine(line: string): boolean {
-  return /^\d+$/.test(line.trim());
+  const trimmed = line.trim();
+  if (isSerialToken(trimmed)) return true;
+  const first = trimmed.split("\t")[0]?.trim() ?? "";
+  return isSerialToken(first) && trimmed.split("\t").filter(Boolean).length <= 2;
 }
 
 function extractEpic(value: string): string | null {
   const trimmed = value.trim().toUpperCase();
   if (EPIC_RE.test(trimmed)) return trimmed;
   return null;
-}
-
-function isDataLine(line: string): boolean {
-  const parts = line.split("\t").map((p) => p.trim());
-  if (parts.length < 6) return false;
-  if (isRelation(parts[0])) return true;
-  if (parts.length >= 7 && isRelation(parts[3])) return true;
-  return isRelation(parts[0]) && /^\d+$/.test(parts[1] ?? "");
 }
 
 function parseNumberName(value: string): { number: string; name: string } {
@@ -105,6 +111,39 @@ function parseNumberName(value: string): { number: string; name: string } {
     return { number: match[1], name: match[2].trim() };
   }
   return { number: "", name: trimmed };
+}
+
+function splitFields(line: string): string[] {
+  return line
+    .split("\t")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+}
+
+function isKnownState(value: string): boolean {
+  return KNOWN_STATES.has(value.trim().toLowerCase());
+}
+
+function isDataLine(line: string): boolean {
+  const parts = splitFields(line);
+  if (parts.length < 6) return false;
+  if (isRelation(parts[0])) return true;
+  if (parts.length >= 7 && isRelation(parts[3])) return true;
+  const stateIdx = parts.findIndex((p) => isKnownState(p));
+  if (stateIdx >= 0 && stateIdx <= 4 && parts.length >= stateIdx + 4) {
+    return isRelation(parts[0]) || (stateIdx === 2 && isRelation(parts[0]));
+  }
+  return false;
+}
+
+function isFullTabRow(line: string): boolean {
+  const parts = splitFields(line);
+  if (parts.length < 8) return false;
+  if (isRelation(parts[0]) || isRelation(parts[3])) return true;
+  if (parts.length >= 9 && isRelation(parts[3])) return true;
+  if (parts.length >= 10 && isRelation(parts[3])) return true;
+  const relationIdx = parts.findIndex((p) => isRelation(p));
+  return relationIdx >= 0 && relationIdx <= 4 && parts.length >= relationIdx + 6;
 }
 
 export function translateEciDistrict(raw: string): { district: string; warning?: string } {
@@ -128,6 +167,44 @@ export function translateEciDistrict(raw: string): { district: string; warning?:
   };
 }
 
+function parseSirDataParts(parts: string[]): {
+  relationship: string;
+  age?: string;
+  state: string;
+  districtRaw: string;
+  acRaw: string;
+  psRaw: string;
+  sr_no: string;
+} | null {
+  if (parts.length < 6) return null;
+
+  const relationship = String(normalizeEciRelationship(parts[0] ?? ""));
+  const age = parts[1]?.trim() || undefined;
+  const state = parts[2]?.trim() ?? "";
+
+  let districtRaw = "";
+  let acRaw = "";
+  let psRaw = "";
+  let sr_no = "";
+
+  if (parts.length >= 7) {
+    districtRaw = parts[3] ?? "";
+    acRaw = parts[4] ?? "";
+    psRaw = parts[5] ?? "";
+    sr_no = parts[6]?.trim() ?? "";
+  } else if (parseNumberName(parts[3] ?? "").number) {
+    acRaw = parts[3] ?? "";
+    psRaw = parts[4] ?? "";
+    sr_no = parts[5]?.trim() ?? "";
+  } else {
+    districtRaw = parts[3] ?? "";
+    acRaw = parts[4] ?? "";
+    psRaw = parts[5] ?? "";
+  }
+
+  return { relationship, age, state, districtRaw, acRaw, psRaw, sr_no };
+}
+
 function buildRecord(
   elector: string,
   relative: string,
@@ -135,8 +212,6 @@ function buildRecord(
   serialNo?: string,
   epic = ""
 ): ParsedEciSirRecord | null {
-  if (dataParts.length < 6) return null;
-
   const warnings: string[] = [];
   let parts = [...dataParts];
   let epicNo = epic;
@@ -149,22 +224,28 @@ function buildRecord(
     }
   }
 
-  const relationship = String(normalizeEciRelationship(parts[0] ?? ""));
-  const age = parts[1]?.trim() || undefined;
-  const state = parts[2]?.trim() ?? "";
-  const districtResult = translateEciDistrict(parts[3] ?? "");
+  const parsed = parseSirDataParts(parts);
+  if (!parsed) return null;
+
+  const { relationship, age, state, districtRaw, acRaw, psRaw, sr_no } = parsed;
+  const districtResult = translateEciDistrict(districtRaw);
   if (districtResult.warning) warnings.push(districtResult.warning);
-  if (!districtResult.district) {
+  if (!districtResult.district && districtRaw) {
     warnings.push("District is required — fill it in the form before generating the PDF.");
+  } else if (!districtResult.district && !districtRaw) {
+    warnings.push("District not in paste — defaulting to Hyderabad if available in form.");
   }
 
-  const ac = parseNumberName(parts[4] ?? "");
-  const ps = parseNumberName(parts[5] ?? "");
-  const sr_no = parts[6]?.trim() ?? "";
+  const ac = parseNumberName(acRaw);
+  const ps = parseNumberName(psRaw);
 
   if (!sr_no) warnings.push("Part Serial No. missing — Sr No left blank.");
-  if (!elector) warnings.push("Elector name missing.");
-  if (!relative) warnings.push("Relative name missing.");
+  if (!elector.trim()) warnings.push("Elector name missing.");
+  if (!relative.trim() && relationship) {
+    warnings.push("Relative name missing.");
+  } else if (!relative.trim()) {
+    warnings.push("Relative name missing.");
+  }
   if (!relationship) warnings.push("Relationship missing or unrecognized.");
   if (!ac.number) warnings.push("AC number could not be parsed.");
   if (!ps.number) warnings.push("Polling station / Part No could not be parsed.");
@@ -177,7 +258,7 @@ function buildRecord(
     relationship,
     age,
     state,
-    district: districtResult.district,
+    district: districtResult.district || (districtRaw ? "" : "Hyderabad"),
     ac_number: ac.number,
     ac_name: ac.name,
     part_no: ps.number,
@@ -186,58 +267,121 @@ function buildRecord(
   };
 }
 
-function parseFullTabRow(line: string): ParsedEciSirRecord | null {
-  const parts = line.split("\t").map((p) => p.trim());
-  if (parts.length < 9) return null;
-
+function parseNameSection(
+  lines: string[],
+  serialFromChunk?: string
+): { serialNo?: string; elector: string; relative: string; epic: string } {
+  let serialNo = serialFromChunk;
+  let elector = "";
+  let relative = "";
   let epic = "";
-  let dataStart = 3;
-  const epicAt3 = extractEpic(parts[3] ?? "");
-  if (epicAt3) {
-    epic = epicAt3;
-    dataStart = 4;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.includes("\t")) {
+      const parts = splitFields(trimmed);
+      let idx = 0;
+
+      if (!serialNo && parts.length > 0 && isSerialToken(parts[0])) {
+        serialNo = parts[0];
+        idx = 1;
+      }
+
+      const nameParts: string[] = [];
+      for (let i = idx; i < parts.length; i++) {
+        const part = parts[i];
+        const foundEpic = extractEpic(part);
+        if (foundEpic) {
+          epic = foundEpic;
+          continue;
+        }
+        if (isRelation(part) || isKnownState(part) || isSerialToken(part)) break;
+        nameParts.push(part);
+      }
+
+      if (!elector && nameParts[0]) elector = nameParts[0];
+      if (!relative && nameParts[1]) relative = nameParts[1];
+      continue;
+    }
+
+    const foundEpic = extractEpic(trimmed);
+    if (foundEpic && trimmed.toUpperCase() === foundEpic) {
+      epic = foundEpic;
+      continue;
+    }
+
+    if (!elector) elector = trimmed;
+    else if (!relative) relative = trimmed;
   }
 
-  return buildRecord(parts[1], parts[2], parts.slice(dataStart), parts[0], epic);
+  return { serialNo, elector, relative, epic };
+}
+
+function parseFullTabRow(line: string): ParsedEciSirRecord | null {
+  const parts = splitFields(line);
+  if (parts.length < 8) return null;
+
+  let serialNo: string | undefined;
+  let elector = "";
+  let relative = "";
+  let epic = "";
+  let dataStart = 0;
+
+  if (isSerialToken(parts[0])) {
+    serialNo = parts[0];
+    dataStart = 1;
+  }
+
+  const relationIdx = parts.findIndex((p, i) => i >= dataStart && isRelation(p));
+  if (relationIdx < 0) return null;
+
+  const nameParts = parts.slice(dataStart, relationIdx).filter((p) => !extractEpic(p));
+  for (const part of parts.slice(dataStart, relationIdx)) {
+    const found = extractEpic(part);
+    if (found) epic = found;
+  }
+
+  elector = nameParts[0] ?? "";
+  relative = nameParts[1] ?? "";
+  const dataParts = parts.slice(relationIdx);
+
+  return buildRecord(elector, relative, dataParts, serialNo, epic);
 }
 
 function parseChunk(lines: string[]): ParsedEciSirRecord | null {
   if (lines.length === 1) {
     const line = lines[0];
-    const tabCount = line.split("\t").length;
-    if (tabCount >= 9) return parseFullTabRow(line);
-    if (tabCount >= 6 && isRelation(line.split("\t")[0]?.trim() ?? "")) {
-      return buildRecord("", "", line.split("\t").map((p) => p.trim()));
+    if (isFullTabRow(line)) return parseFullTabRow(line);
+    const parts = splitFields(line);
+    if (parts.length >= 6 && isRelation(parts[0])) {
+      return buildRecord("", "", parts);
     }
   }
 
   let idx = 0;
   let serialNo: string | undefined;
   if (isSerialLine(lines[0])) {
-    serialNo = lines[0].trim();
-    idx = 1;
+    const firstParts = splitFields(lines[0]);
+    serialNo = firstParts[0];
+    idx = firstParts.length > 1 ? 0 : 1;
   }
 
   const dataIdx = lines.findIndex((line, i) => i >= idx && isDataLine(line));
-  if (dataIdx === -1) return null;
-
-  const preDataLines = lines.slice(idx, dataIdx);
-  let epic = "";
-  const nameLines: string[] = [];
-  for (const line of preDataLines) {
-    const found = extractEpic(line);
-    if (found && line.trim().toUpperCase() === found) {
-      epic = found;
-    } else {
-      nameLines.push(line);
-    }
+  if (dataIdx === -1) {
+    if (lines.length === 1 && isFullTabRow(lines[0])) return parseFullTabRow(lines[0]);
+    return null;
   }
 
-  const elector = nameLines[0] ?? "";
-  const relative = nameLines[1] ?? "";
-  const dataParts = lines[dataIdx].split("\t").map((p) => p.trim());
+  const preDataLines = lines.slice(idx, dataIdx);
+  const { serialNo: parsedSerial, elector, relative, epic } = parseNameSection(
+    preDataLines,
+    serialNo
+  );
+  const dataParts = splitFields(lines[dataIdx]);
 
-  return buildRecord(elector, relative, dataParts, serialNo, epic);
+  return buildRecord(elector, relative, dataParts, parsedSerial ?? serialNo, epic);
 }
 
 function splitRecordChunks(lines: string[]): string[][] {
@@ -245,9 +389,7 @@ function splitRecordChunks(lines: string[]): string[][] {
   let current: string[] = [];
 
   for (const line of lines) {
-    const tabCount = line.split("\t").length;
-
-    if (tabCount >= 9) {
+    if (isFullTabRow(line)) {
       if (current.length) {
         chunks.push(current);
         current = [];
