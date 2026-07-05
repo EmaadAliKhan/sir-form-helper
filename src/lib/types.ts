@@ -222,7 +222,7 @@ export function defaultPayloadFromVoter(
     epic: voter.epic,
     serial_no: String(voter.serial_no),
     part_no: String(voter.booth_no),
-    house_no: voter.house_no ?? "",
+    house_no: "",
     relative_name_from_2025: voter.relative_name ?? "",
     ac_name_2025: settings.ac_name_2025,
     ac_no_2025: settings.ac_no_2025,

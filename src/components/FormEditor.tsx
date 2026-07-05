@@ -376,7 +376,6 @@ export function FormEditor({ formId }: { formId: string }) {
           <Field label="EPIC" optional value={payload.epic} onChange={(v) => updateField("epic", v)} />
           <Field label="Serial No" optional value={payload.serial_no} onChange={(v) => updateField("serial_no", v)} />
           <Field label="Part No (Booth)" optional value={payload.part_no} onChange={(v) => updateField("part_no", v)} />
-          <Field label="House No" optional value={payload.house_no} onChange={(v) => updateField("house_no", v)} />
           <Field label="AC Name" value={payload.ac_name_2025} onChange={(v) => updateField("ac_name_2025", v)} />
           <Field label="AC No" value={payload.ac_no_2025} onChange={(v) => updateField("ac_no_2025", v)} />
           <Field label="State" value={payload.state_2025} onChange={(v) => updateField("state_2025", v)} />

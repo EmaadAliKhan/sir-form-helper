@@ -341,7 +341,6 @@ export function defaultPayloadFromEciElectoral(
 ): FormPayload {
   const boothKey = record.part_no || "0";
   const blo = settings.blo_by_booth[boothKey] ?? { name: "", contact: "" };
-  const houseNo = record.polling_station;
 
   return {
     form_kind: "enumeration",
@@ -349,7 +348,7 @@ export function defaultPayloadFromEciElectoral(
     epic: record.epic,
     serial_no: record.part_serial,
     part_no: record.part_no,
-    house_no: houseNo,
+    house_no: "",
     relative_name_from_2025: record.relative_name,
     ac_name_2025: record.ac_name || settings.ac_name_2025,
     ac_no_2025: record.ac_number || settings.ac_no_2025,
