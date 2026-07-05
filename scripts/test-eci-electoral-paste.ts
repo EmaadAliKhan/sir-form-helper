@@ -4,10 +4,15 @@ import {
 } from "../src/lib/eciElectoralPasteParser.ts";
 import { DEFAULT_SETTINGS } from "../src/lib/types.ts";
 
+const userPaste = `1	BYX1773399	Bdavid Prabhakar B
+బి.దావీద్ ప్రభాకర్ బి	50	Bsrao B
+బి.యస్.రావు బి	Telangana	17-Hyderabad	62-Sanathnagar	150-Balkampet	.O/O Superintendentending Engineer (R & B) Rural Circle, H.No. 7-1-215, Balkampet, Hyderabad	1105	View Details`;
+
 const teluguName = "ఆర్.భాగ్యఅమ్మ ఆర్";
 const teluguRelative = "ఆర్.ఆగాస్వామి ఆర్";
 
 const samples = [
+  userPaste,
   `1	BYX1772995	Rbhagayamma R
 ${teluguName}	65	Ragaswami R
 ${teluguRelative}	Telangana	17-Hyderabad	62-Sanathnagar	150-Balkampet	.O/O Superintendentending Engineer (R & B) Rural Circle, H.No. 7-1-215, Balkampet, Hyderabad	17`,
@@ -31,21 +36,25 @@ for (let i = 0; i < samples.length; i++) {
     console.log(
       " ",
       rec.epic,
-      rec.name,
-      rec.relative_name,
-      rec.ac_number,
-      rec.ac_name,
-      rec.part_no,
-      rec.part_serial,
+      "| name:", rec.name,
+      "| rel:", rec.relative_name,
+      "| state:", rec.state,
+      "| AC:", rec.ac_number, rec.ac_name,
+      "| part:", rec.part_no,
+      "| sr:", rec.part_serial,
+      "| house:", rec.polling_station.slice(0, 40),
       rec.warnings
     );
   }
 }
 
-const bhaskra = parseEciElectoralPaste(samples[samples.length - 1]).records[0];
-if (bhaskra) {
-  const payload = defaultPayloadFromEciElectoral(bhaskra, DEFAULT_SETTINGS);
-  console.log("House no empty:", payload.house_no === "");
-  console.log("  house_no:", JSON.stringify(payload.house_no));
-  console.log("  EPIC:", payload.epic, "Sr:", payload.serial_no);
+const user = parseEciElectoralPaste(userPaste).records[0];
+if (user) {
+  const payload = defaultPayloadFromEciElectoral(user, DEFAULT_SETTINGS);
+  console.log("\nUser payload:");
+  console.log("  serial_no:", payload.serial_no);
+  console.log("  state:", payload.state_2025);
+  console.log("  ac:", payload.ac_no_2025, payload.ac_name_2025);
+  console.log("  part:", payload.part_no);
+  console.log("  house:", payload.house_no);
 }

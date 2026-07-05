@@ -27,10 +27,47 @@ const TELUGU_RE = /[\u0C00-\u0C7F]/;
 const EPIC_RE = /^[A-Z]{3}\d{7}$/i;
 const HEADER_RE =
   /s\.\s*no\.?\s*\t.*epic number|epic number\t.*name\t.*age|elector full name|relative full name|relative type/i;
+const KNOWN_STATES = new Set([
+  "andhra pradesh",
+  "arunachal pradesh",
+  "assam",
+  "bihar",
+  "chhattisgarh",
+  "delhi",
+  "goa",
+  "gujarat",
+  "haryana",
+  "himachal pradesh",
+  "jammu and kashmir",
+  "jharkhand",
+  "karnataka",
+  "kerala",
+  "ladakh",
+  "madhya pradesh",
+  "maharashtra",
+  "manipur",
+  "meghalaya",
+  "mizoram",
+  "nagaland",
+  "odisha",
+  "punjab",
+  "rajasthan",
+  "sikkim",
+  "tamil nadu",
+  "telangana",
+  "tripura",
+  "uttar pradesh",
+  "uttarakhand",
+  "west bengal",
+]);
 
 function isHeaderLine(line: string): boolean {
   if (EPIC_RE.test(line)) return false;
   return HEADER_RE.test(line);
+}
+
+function isViewDetails(value: string): boolean {
+  return /^view details$/i.test(value.trim());
 }
 
 function parseNumberName(value: string): { number: string; name: string } {
@@ -42,7 +79,40 @@ function parseNumberName(value: string): { number: string; name: string } {
   return { number: "", name: trimmed };
 }
 
-/** Drop Telugu duplicate lines; keep English tabbed fields. */
+function isTeluguOnly(value: string): boolean {
+  const trimmed = value.trim();
+  if (!TELUGU_RE.test(trimmed)) return false;
+  const latin = trimmed
+    .replace(TELUGU_RE, "")
+    .replace(/[^\x00-\x7F]/g, "")
+    .replace(/[.\s\-/]/g, "");
+  return latin.length === 0;
+}
+
+function isAge(value: string): boolean {
+  const trimmed = value.trim();
+  if (!/^\d{1,3}$/.test(trimmed)) return false;
+  const n = Number(trimmed);
+  return n >= 1 && n <= 120;
+}
+
+function isKnownState(value: string): boolean {
+  return KNOWN_STATES.has(value.trim().toLowerCase());
+}
+
+function isLikelyAddress(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || isViewDetails(trimmed)) return false;
+  if (/^\d+$/.test(trimmed)) return false;
+  return (
+    trimmed.length > 24 ||
+    /H\.?\s*No\.?|Superintendent|Circle|Balkampet|Road|Street|Colony|Hyderabad/i.test(trimmed) ||
+    trimmed.startsWith(".") ||
+    trimmed.includes(",")
+  );
+}
+
+/** Drop Telugu duplicate prefix columns; keep English tabbed fields. */
 function cleanPasteLine(line: string): string {
   const trimmed = line.trim();
   if (!trimmed) return "";
@@ -50,17 +120,13 @@ function cleanPasteLine(line: string): string {
   const tabIdx = trimmed.indexOf("\t");
   if (tabIdx >= 0) {
     const before = trimmed.slice(0, tabIdx).trim();
-    const after = trimmed.slice(tabIdx + 1);
-    const beforeLatin = before.replace(TELUGU_RE, "").replace(/[^\x00-\x7F]/g, "").trim();
-    if (TELUGU_RE.test(before) && beforeLatin.length < 2) {
-      return after.trim();
+    const after = trimmed.slice(tabIdx + 1).trim();
+    if (TELUGU_RE.test(before)) {
+      return after;
     }
   }
 
-  if (TELUGU_RE.test(trimmed)) {
-    const latin = trimmed.replace(TELUGU_RE, "").replace(/[^\x00-\x7F]/g, "").trim();
-    if (latin.length < 2) return "";
-  }
+  if (isTeluguOnly(trimmed)) return "";
 
   return trimmed;
 }
@@ -90,25 +156,86 @@ function findEpicIndex(parts: string[]): number {
   return parts.findIndex((p) => EPIC_RE.test(p.trim()));
 }
 
+function sanitizeFields(parts: string[]): string[] {
+  return parts
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0 && !isViewDetails(p) && !isTeluguOnly(p));
+}
+
 function buildRecord(parts: string[]): ParsedEciElectoralRecord | null {
-  const epicIdx = findEpicIndex(parts);
+  const fields = sanitizeFields(parts);
+  const epicIdx = findEpicIndex(fields);
   if (epicIdx === -1) return null;
 
   const warnings: string[] = [];
-  const hasLeadingSerial =
-    epicIdx > 0 && /^\d+$/.test(parts[epicIdx - 1]?.trim() ?? "");
+  const hasLeadingSerial = epicIdx > 0 && /^\d+$/.test(fields[epicIdx - 1] ?? "");
+  const list_serial = hasLeadingSerial ? fields[epicIdx - 1].trim() : "";
+  const epic = fields[epicIdx].trim().toUpperCase();
 
-  const serial_no = hasLeadingSerial ? parts[epicIdx - 1].trim() : "";
-  const epic = parts[epicIdx].trim().toUpperCase();
-  const name = parts[epicIdx + 1]?.trim() ?? "";
-  const age = parts[epicIdx + 2]?.trim() ?? "";
-  const relative_name = parts[epicIdx + 3]?.trim() ?? "";
-  const state = parts[epicIdx + 4]?.trim() ?? "";
-  const district = parseNumberName(parts[epicIdx + 5] ?? "");
-  const ac = parseNumberName(parts[epicIdx + 6] ?? "");
-  const part = parseNumberName(parts[epicIdx + 7] ?? "");
-  const polling_station = (parts[epicIdx + 8]?.trim() ?? "").replace(/\s*view details\s*$/i, "");
-  const part_serial = (parts[epicIdx + 9]?.trim() ?? "").replace(/\s*view details\s*$/i, "");
+  const tail = fields.slice(epicIdx + 1);
+  if (tail.length === 0) return null;
+
+  const name = tail[0]?.trim() ?? "";
+  let cursor = 1;
+
+  // Skip duplicate name tokens before age (Telugu lines already removed).
+  while (
+    cursor < tail.length &&
+    !isAge(tail[cursor]) &&
+    !parseNumberName(tail[cursor]).number &&
+    !isKnownState(tail[cursor])
+  ) {
+    cursor++;
+  }
+
+  const age = cursor < tail.length && isAge(tail[cursor]) ? tail[cursor++].trim() : "";
+
+  // ECI row order: Age → Relative name → State → numbered fields…
+  let relative_name = "";
+  if (
+    cursor < tail.length &&
+    !parseNumberName(tail[cursor]).number &&
+    !isKnownState(tail[cursor]) &&
+    !isLikelyAddress(tail[cursor])
+  ) {
+    relative_name = tail[cursor++].trim();
+  }
+
+  let state = "";
+  if (cursor < tail.length && isKnownState(tail[cursor])) {
+    state = tail[cursor++].trim();
+  }
+
+  const numbered: Array<{ number: string; name: string }> = [];
+  while (cursor < tail.length) {
+    const parsed = parseNumberName(tail[cursor]);
+    if (!parsed.number) break;
+    numbered.push(parsed);
+    cursor++;
+  }
+
+  const ac = numbered[0] ?? { number: "", name: "" };
+  const part = numbered[1] ?? { number: "", name: "" };
+  const booth = numbered[2] ?? { number: "", name: "" };
+
+  const rest = tail.slice(cursor).filter((p) => !isViewDetails(p));
+  const addressParts: string[] = [];
+  const numericCandidates: string[] = [];
+
+  for (const field of rest) {
+    const trimmed = field.trim();
+    if (/^\d+$/.test(trimmed)) {
+      numericCandidates.push(trimmed);
+      continue;
+    }
+    if (parseNumberName(trimmed).number) continue;
+    if (isLikelyAddress(trimmed) || trimmed.includes("/")) {
+      addressParts.push(trimmed);
+    }
+  }
+
+  const part_serial = numericCandidates.at(-1) ?? "";
+  const polling_station = addressParts.join(", ").trim();
 
   if (!name) warnings.push("Elector name missing.");
   if (!relative_name) warnings.push("Relative name missing.");
@@ -117,18 +244,18 @@ function buildRecord(parts: string[]): ParsedEciElectoralRecord | null {
   if (!part.number) warnings.push("Part number could not be parsed.");
 
   return {
-    serial_no,
+    serial_no: list_serial,
     epic,
     name,
     age,
     relative_name,
     state,
-    district_code: district.number,
-    district_name: district.name,
+    district_code: "",
+    district_name: "",
     ac_number: ac.number,
     ac_name: ac.name,
     part_no: part.number,
-    part_name: part.name,
+    part_name: part.name || booth.name,
     polling_station,
     part_serial,
     warnings,
@@ -205,6 +332,7 @@ export function defaultPayloadFromEciElectoral(
 ): FormPayload {
   const boothKey = record.part_no || "0";
   const blo = settings.blo_by_booth[boothKey] ?? { name: "", contact: "" };
+  const houseNo = record.polling_station;
 
   return {
     form_kind: "enumeration",
@@ -212,7 +340,7 @@ export function defaultPayloadFromEciElectoral(
     epic: record.epic,
     serial_no: record.part_serial,
     part_no: record.part_no,
-    house_no: "",
+    house_no: houseNo,
     relative_name_from_2025: record.relative_name,
     ac_name_2025: record.ac_name || settings.ac_name_2025,
     ac_no_2025: record.ac_number || settings.ac_no_2025,
