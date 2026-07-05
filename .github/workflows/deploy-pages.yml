@@ -25,6 +25,8 @@ jobs:
           node-version: 24
           cache: npm
 
+      - uses: actions/configure-pages@v5
+
       - run: npm ci
 
       - name: Build static site
@@ -32,7 +34,7 @@ jobs:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
         run: npm run build:pages
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: out
 
@@ -43,5 +45,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: Wandalen/wretry.action@v3.5.0
+        with:
+          attempt_limit: 5
+          attempt_delay: 30000
+          action: actions/deploy-pages@v4
